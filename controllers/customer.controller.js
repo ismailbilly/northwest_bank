@@ -4,6 +4,7 @@ const { createWallet } =require('./wallet.controller')
 const {v4: uuidv4} =require('uuid')
 const {Op}= require('sequelize')
 const {registerValidation} = require('../validations/register.validation')
+const {updateValidation} = require('../validations/update.validation')
 const  {hashMyPassword, generateOtp} = require('../utils/index')
 const { sendEmail } = require('../services/email')
 const { sendSms } =require('../services/sms')
@@ -151,4 +152,221 @@ const verifyEmailOtpAndSendPhoneOtp= ((req,res)=>{
         })
     }
 })
-module.exports = {register, verifyEmailOtpAndSendPhoneOtp}
+
+const verifyPhoneOtp = (req, res) => { 
+
+    const { phone, phone_otp } = req.params
+    try {
+        otp.findAll({
+            where: {
+                phone: phone,
+                otp: phone_otp
+            },
+            attributes: [ 'otp', 'phone', 'createdAt'], 
+        })
+        .then((otpDataFetched) => {
+            if (otpDataFetched.length == 0) throw new Error('Invalid OTP')
+
+            const timeOtpWasSent = Date.now() - new Date(otpDataFetched[0].dataValues.createdAt)
+        
+            const convertToMin = Math.floor(timeOtpWasSent / 60000) // 60000 is the number of milliseconds in a minute
+
+            if (convertToMin > process.env.OTPExpirationTime) throw new Error('OTP has expired')
+
+            return customer.update({ is_phone_number_verified: true }, {
+                where: {
+                    phone_number: phone
+                }
+              })
+            
+
+        
+        })
+        .then((phoneverifiedData) => { 
+            return otp.destroy({
+                where: {
+                    otp: phone_otp,
+                    phone: phone
+                }
+            })
+        })
+        .then((data5) => {
+                res.status(200).send({
+                    status: true,
+                    message: 'Phone successfuly verified. Welcome onboard'
+                })
+        })
+        .catch((err) => {
+            res.status(400).json({
+                status: false,
+                message: err.message || "Some error occurred"
+            })
+        })
+        
+    } catch (err) {
+        res.status(400).json({
+            status: false,
+            message: err.message || "Some error occurred"
+        })
+
+    }
+
+}
+
+const resendPhoneOtp = async (req, res) => {
+
+    const { phone } = req.params
+    const newOtp = generateOtp()
+
+    try { 
+
+        const findOtpWithPhone =   await otp.findAll({ where: { phone: phone } })
+        
+        if (findOtpWithPhone.length == 0) throw new Error('Phone number does not exist')
+   
+        await otp.destroy({  where: {  phone: phone } })
+
+        await otp.create({ otp: newOtp, phone: phone })
+        
+        sendSms(phone, `Hello, your new otp is ${newOtp}`)
+
+        res.status(200).send({
+            status: true,
+            message: 'otp resent to phone number'
+        })
+
+
+        // otp.findAll({
+        //     where: {
+        //         phone: phone
+        //     }
+        // })
+        // .then(data => {
+        //         if (data.length == 0) throw new Error('Phone number does not exist')
+              
+        //     return otp.destroy({
+        //             where: {
+        //                 phone: phone
+        //             }
+        //     })
+        // })
+        // .then(data2 => {
+
+        //         return otp.create({
+        //             otp: newOtp,
+        //             phone: phone
+        //         })
+        //     })
+        // .then(data3 => { 
+        //         sendSms(phone, `Hello, your new otp is ${newOtp}`)
+        //         res.status(200).send({
+        //             status: true,
+        //             message: 'otp resent to  phone number'
+        //         })
+        // })
+
+    } catch (e) {
+        res.status(400).json({
+            status: false,
+            message: e.message || "Some error occurred"
+        })
+    }
+
+
+
+
+}
+
+const resendEmailOtp = async (req, res) => {
+
+    const { email } = req.params
+    const newOtp = generateOtp()
+
+    try { 
+
+        const findOtpWithEmail =   await otp.findAll({ where: { email: email } })
+        
+        if (findOtpWithEmail.length == 0) throw new Error('Email does not exist')
+   
+        await otp.destroy({  where: {  email: email } })
+
+        await otp.create({ otp: newOtp, email: email })
+        
+        sendEmail(email, 'RESEND OTP', `Hello, your new otp is ${newOtp}`)  
+
+        res.status(200).send({
+            status: true,
+            message: 'otp resent to email'
+        })
+
+
+     
+
+    } catch (e) {
+        console.log(e)
+        res.status(400).json({
+            status: false,
+            message: e.message || "Some error occurred"
+        })
+    }
+
+
+
+
+}
+
+
+const updateCustomer = async (req, res) => {  
+    // joi validation
+const { error, value } = updateValidation(req.body)
+
+if (error != undefined) {
+      
+    res.status(400).json({
+        status: false,
+        message: error.details[0].message
+    })
+} else {
+    const { customer_id } = req.params
+    const { title, lastname, othernames, gender, house_number, street, landmark, local_govt, dob,
+        country, state_origin, local_govt_origin, means_of_id, means_of_id_number, photo,
+        marital_status } = req.body
+
+    try {
+
+        await customer.update({
+            title: title,
+            lastname: lastname,
+            othernames: othernames,
+            gender: gender,
+            house_number: house_number,
+            street: street,
+            landmark: landmark,
+            local_govt: local_govt,
+            dob: dob,
+            country: country,
+            state_origin: state_origin,
+            local_govt_origin: local_govt_origin,
+            means_of_id: means_of_id,
+            means_of_id_number: means_of_id_number,
+            marital_status: marital_status
+        }, { where: { customer_id: customer_id } })
+
+        res.status(200).send({
+            status: true,
+            message: 'Customer updated successfully'
+        })
+
+    } catch (e) {
+        res.status(400).json({
+            status: false,
+            message: e.message || "Some error occurred"
+        })
+    }
+}
+
+
+}
+
+module.exports = {register, verifyEmailOtpAndSendPhoneOtp, verifyPhoneOtp,
+    resendPhoneOtp, resendEmailOtp, updateCustomer}
