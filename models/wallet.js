@@ -14,6 +14,11 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   wallet.init({
+    sn: {
+      autoIncrement: true,
+      primaryKey: true,
+      type: DataTypes.INTEGER
+    },
     wallet_id: DataTypes.STRING,
     wallet_type: DataTypes.ENUM(1, 2, 3),
     balance: DataTypes.DECIMAL,

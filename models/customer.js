@@ -17,7 +17,7 @@ module.exports = (sequelize, DataTypes) => {
 
     sn:{
       type: DataTypes.INTEGER,
-      
+      autoIncrement:true
   },
     customer_id: {   
       primaryKey: true,
